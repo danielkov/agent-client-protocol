@@ -1913,6 +1913,9 @@ starting with '$/' it is free to ignore the notification."
                     self.agent.get("SetSessionConfigOptionRequest").unwrap()
                 }
                 "session/prompt" => self.agent.get("PromptRequest").unwrap(),
+                "session/inject" => self.agent.get("InjectSessionRequest").unwrap(),
+                "session/revoke_inject" => self.agent.get("RevokeInjectSessionRequest").unwrap(),
+                "session/replace_inject" => self.agent.get("ReplaceInjectSessionRequest").unwrap(),
                 "session/cancel" => self
                     .agent
                     .get("CancelSessionNotification")
