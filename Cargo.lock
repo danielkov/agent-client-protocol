@@ -11,7 +11,7 @@ name = "agent-client-protocol-json-schema-v2"
 version = "2.0.0-alpha.5"
 
 [[package]]
-name = "agent-client-protocol-schema"
+name = "agentkit-acp-schema"
 version = "1.9.1"
 dependencies = [
  "anyhow",
@@ -499,7 +499,7 @@ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 name = "schema-generator"
 version = "0.0.0"
 dependencies = [
- "agent-client-protocol-schema",
+ "agentkit-acp-schema",
  "schemars 1.2.2",
  "serde",
  "serde_json",
