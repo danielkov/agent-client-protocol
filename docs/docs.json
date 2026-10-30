@@ -203,6 +203,7 @@
             "group": "Active",
             "pages": [
               "rfds/streamable-http-websocket-transport",
+              "rfds/subagents",
               {
                 "group": "v2",
                 "expanded": true,
