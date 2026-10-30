@@ -10,7 +10,7 @@ use agent_client_protocol_schema::v1::{
 #[cfg(feature = "unstable_protocol_v2")]
 use agent_client_protocol_schema::v2::{
     AGENT_METHOD_NAMES, AgentNotification, AgentRequest, AgentResponse, CLIENT_METHOD_NAMES,
-    ClientNotification, ClientRequest, ClientResponse, JsonRpcBatch, JsonRpcMessage, Notification,
+    ClientNotification, ClientRequest, ClientResponse, JsonRpcMessage, Notification,
     PROTOCOL_LEVEL_METHOD_NAMES, ProtocolLevelNotification, Request, Response,
 };
 use schemars::{
@@ -26,28 +26,30 @@ use std::{
 
 use markdown_generator::MarkdownGenerator;
 
-#[cfg(feature = "unstable_protocol_v2")]
 const PROTOCOL_DOC_BASE: &str = "https://agentclientprotocol.com/protocol";
 
-#[cfg(feature = "unstable_protocol_v2")]
-const VERSIONED_PROTOCOL_DOC_PATHS: &[&str] = &[
-    "agent-plan",
-    "authentication",
-    "cancellation",
-    "content",
-    "elicitation",
-    "error",
-    "extensibility",
-    "initialization",
-    "prompt-lifecycle",
-    "session-config-options",
-    "session-delete",
-    "session-list",
-    "session-setup",
-    "slash-commands",
-    "tool-calls",
-    "transports",
-];
+/// Protocol version directory the schema's doc links point into.
+const PROTOCOL_VERSION_DIR: &str = if cfg!(feature = "unstable_protocol_v2") {
+    "v2"
+} else {
+    "v1"
+};
+
+/// Rewrites stable doc links to the draft pages when generating the unstable schema.
+///
+/// Source doc comments link to the stable versioned pages
+/// (`https://agentclientprotocol.com/protocol/v2/...`). The unstable schema documents draft
+/// features, so its links point at the matching `draft/` pages instead.
+fn publication_doc_links(text: &str) -> String {
+    if cfg!(feature = "unstable") {
+        text.replace(
+            &format!("{PROTOCOL_DOC_BASE}/{PROTOCOL_VERSION_DIR}/"),
+            &format!("{PROTOCOL_DOC_BASE}/{PROTOCOL_VERSION_DIR}/draft/"),
+        )
+    } else {
+        text.to_string()
+    }
+}
 
 /// All messages that an agent can send to a client.
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -71,30 +73,6 @@ enum ClientOutgoingMessage {
     Notification(Notification<ClientNotification>),
 }
 
-/// Messages that an agent can include in a JSON-RPC batch call to a client.
-#[cfg(feature = "unstable_protocol_v2")]
-#[derive(Serialize, Deserialize, JsonSchema)]
-#[serde(untagged)]
-#[schemars(inline)]
-#[allow(clippy::large_enum_variant)]
-enum AgentBatchCallMessage {
-    Request(Request<AgentRequest>),
-    Notification(Notification<AgentNotification>),
-    ProtocolLevelNotification(Notification<ProtocolLevelNotification>),
-}
-
-/// Messages that a client can include in a JSON-RPC batch call to an agent.
-#[cfg(feature = "unstable_protocol_v2")]
-#[derive(Serialize, Deserialize, JsonSchema)]
-#[serde(untagged)]
-#[schemars(inline)]
-#[allow(clippy::large_enum_variant)]
-enum ClientBatchCallMessage {
-    Request(Request<ClientRequest>),
-    Notification(Notification<ClientNotification>),
-    ProtocolLevelNotification(Notification<ProtocolLevelNotification>),
-}
-
 #[expect(dead_code)]
 #[derive(JsonSchema)]
 #[serde(untagged)]
@@ -103,14 +81,6 @@ enum ClientBatchCallMessage {
 enum AcpTypes {
     Agent(JsonRpcMessage<AgentOutgoingMessage>),
     Client(JsonRpcMessage<ClientOutgoingMessage>),
-    #[cfg(feature = "unstable_protocol_v2")]
-    AgentBatchCall(JsonRpcBatch<AgentBatchCallMessage>),
-    #[cfg(feature = "unstable_protocol_v2")]
-    AgentBatchResponse(JsonRpcBatch<Response<AgentResponse>>),
-    #[cfg(feature = "unstable_protocol_v2")]
-    ClientBatchCall(JsonRpcBatch<ClientBatchCallMessage>),
-    #[cfg(feature = "unstable_protocol_v2")]
-    ClientBatchResponse(JsonRpcBatch<Response<ClientResponse>>),
     ProtocolLevel(JsonRpcMessage<Notification<ProtocolLevelNotification>>),
 }
 
@@ -232,19 +202,7 @@ fn write_schema(schema_value: &serde_json::Value, schema_dir: &Path, docs_protoc
     let mut markdown_gen = MarkdownGenerator::new(schema_file);
     let mut markdown_doc = markdown_gen.generate(schema_value);
 
-    let protocol_doc_base = match (
-        cfg!(feature = "unstable_protocol_v2"),
-        cfg!(feature = "unstable"),
-    ) {
-        (true, true) => "https://agentclientprotocol.com/protocol/v2/draft/",
-        (true, false) => "https://agentclientprotocol.com/protocol/v2/",
-        (false, true) => "https://agentclientprotocol.com/protocol/v1/draft/",
-        (false, false) => "https://agentclientprotocol.com/protocol/v1/",
-    };
-    markdown_doc = markdown_doc.replace(
-        "https://agentclientprotocol.com/protocol/",
-        protocol_doc_base,
-    );
+    markdown_doc = publication_doc_links(&markdown_doc);
 
     let doc_file: &str = match (
         cfg!(feature = "unstable_protocol_v2"),
@@ -270,61 +228,326 @@ fn write_schema(schema_value: &serde_json::Value, schema_dir: &Path, docs_protoc
 }
 
 fn schema_value_for_publication(schema_value: &serde_json::Value) -> serde_json::Value {
-    #[cfg(feature = "unstable_protocol_v2")]
-    {
-        let mut schema_value = schema_value.clone();
-        let protocol_doc_base = if cfg!(feature = "unstable") {
-            format!("{PROTOCOL_DOC_BASE}/v2/draft")
-        } else {
-            format!("{PROTOCOL_DOC_BASE}/v2")
-        };
-
-        for path in VERSIONED_PROTOCOL_DOC_PATHS {
-            replace_string_values(
-                &mut schema_value,
-                &format!("{PROTOCOL_DOC_BASE}/{path}"),
-                &format!("{protocol_doc_base}/{path}"),
-            );
-        }
-        schema_value
-    }
-
-    #[cfg(not(feature = "unstable_protocol_v2"))]
-    {
-        schema_value.clone()
-    }
+    let mut schema_value = schema_value.clone();
+    replace_string_values(&mut schema_value);
+    schema_value
 }
 
-#[cfg(feature = "unstable_protocol_v2")]
-fn replace_string_values(value: &mut serde_json::Value, from: &str, to: &str) {
+fn replace_string_values(value: &mut serde_json::Value) {
     match value {
-        serde_json::Value::String(string) => {
-            *string = string.replace(from, to);
-        }
-        serde_json::Value::Array(array) => {
-            for value in array {
-                replace_string_values(value, from, to);
-            }
-        }
-        serde_json::Value::Object(object) => {
-            for value in object.values_mut() {
-                replace_string_values(value, from, to);
-            }
-        }
+        serde_json::Value::String(string) => *string = publication_doc_links(string),
+        serde_json::Value::Array(array) => array.iter_mut().for_each(replace_string_values),
+        serde_json::Value::Object(object) => object.values_mut().for_each(replace_string_values),
         serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {}
     }
 }
 
 #[cfg(test)]
 mod schema_annotation_tests {
-    #[cfg(feature = "unstable_protocol_v2")]
-    use super::{PROTOCOL_DOC_BASE, VERSIONED_PROTOCOL_DOC_PATHS, schema_value_for_publication};
+    use super::{PROTOCOL_DOC_BASE, PROTOCOL_VERSION_DIR, schema_value_for_publication};
     use super::{root_schema_value, schema_crate_dir};
     use serde_json::Value;
     use std::fs;
 
     const DEFAULT_ON_ERROR_EXTENSION: &str = "x-deserialize-default-on-error";
     const SKIP_INVALID_ITEMS_EXTENSION: &str = "x-deserialize-skip-invalid-items";
+    const DEFAULT_ON_NULL_EXTENSION: &str = "x-deserialize-default-on-null";
+
+    #[test]
+    fn generated_notice_schema_is_available_without_unstable_features() {
+        let schema = root_schema_value();
+        let notice = def_schema(&schema, "Notice");
+        assert_eq!(notice["required"], serde_json::json!(["severity", "title"]));
+        assert!(!notice["description"].as_str().unwrap().contains("UNSTABLE"));
+        let title = property_schema(&schema, "Notice", "title");
+        assert_eq!(title["type"], "string");
+        assert_eq!(title["minLength"], 1);
+        assert_no_extension(title, DEFAULT_ON_ERROR_EXTENSION);
+        for (field, types) in [
+            ("description", serde_json::json!(["string", "null"])),
+            ("_meta", serde_json::json!(["object", "null"])),
+        ] {
+            let property = property_schema(&schema, "Notice", field);
+            assert_eq!(property["type"], types);
+            assert_bool_extension(property, DEFAULT_ON_ERROR_EXTENSION);
+        }
+
+        let severities = def_schema(&schema, "NoticeSeverity")["anyOf"]
+            .as_array()
+            .unwrap();
+        for severity in ["info", "warning", "error"] {
+            assert!(
+                severities
+                    .iter()
+                    .any(|variant| variant["const"] == severity)
+            );
+        }
+        let other = severities
+            .iter()
+            .find(|variant| variant["title"] == "other")
+            .unwrap();
+        assert_eq!(other["type"], "string");
+        for constraint in ["const", "enum", "pattern", "not"] {
+            assert!(other.get(constraint).is_none());
+        }
+        assert!(severities.iter().all(|variant| variant["type"] == "string"));
+
+        let updates = def_schema(&schema, "SessionUpdate");
+        let variants = updates
+            .get("oneOf")
+            .or_else(|| updates.get("anyOf"))
+            .and_then(Value::as_array)
+            .unwrap();
+        let variant = variants
+            .iter()
+            .find(|variant| {
+                variant.pointer("/properties/sessionUpdate/const") == Some(&Value::from("notice"))
+            })
+            .expect("notice must be a standard session update");
+        assert!(schema_contains_ref(variant, "#/$defs/Notice"));
+        assert!(
+            !variant["description"]
+                .as_str()
+                .unwrap()
+                .contains("UNSTABLE")
+        );
+
+        #[cfg(not(feature = "unstable_protocol_v2"))]
+        {
+            let capability = property_schema(&schema, "ClientSessionCapabilities", "notices");
+            assert!(schema_contains_ref(
+                capability,
+                "#/$defs/NoticeCapabilities"
+            ));
+            assert!(
+                capability["anyOf"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|variant| variant["type"] == "null")
+            );
+            assert!(
+                !def_schema(&schema, "ClientSessionCapabilities")["required"]
+                    .as_array()
+                    .is_some_and(|fields| fields.contains(&Value::from("notices")))
+            );
+        }
+        #[cfg(feature = "unstable_protocol_v2")]
+        {
+            assert!(schema["$defs"].get("NoticeCapabilities").is_none());
+            let fallback = variants
+                .iter()
+                .find(|variant| variant["title"] == "other")
+                .unwrap();
+            assert!(
+                fallback["not"]["anyOf"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|variant| {
+                        variant.pointer("/properties/sessionUpdate/const")
+                            == Some(&Value::from("notice"))
+                    })
+            );
+        }
+    }
+
+    #[test]
+    fn generated_compaction_schema_is_available_without_unstable_features() {
+        let schema = root_schema_value();
+        assert_eq!(def_schema(&schema, "CompactionId")["type"], "string");
+        for (definition, required, referenced_fields) in [
+            (
+                "CompactionUpdate",
+                serde_json::json!(["compactionId", "status"]),
+                [
+                    ("compactionId", "CompactionId"),
+                    ("status", "CompactionStatus"),
+                ],
+            ),
+            (
+                "CompactionSummaryChunk",
+                serde_json::json!(["compactionId", "content"]),
+                [
+                    ("compactionId", "CompactionId"),
+                    ("content", "ContentBlock"),
+                ],
+            ),
+        ] {
+            let def = def_schema(&schema, definition);
+            assert_eq!(def["required"], required);
+            assert!(!def["description"].as_str().unwrap().contains("UNSTABLE"));
+            for (field, target) in referenced_fields {
+                let property = property_schema(&schema, definition, field);
+                // Required fields reference the non-null type directly, not a
+                // nullable alternative, and have no deserialization default.
+                assert_eq!(
+                    property["allOf"],
+                    serde_json::json!([{"$ref": format!("#/$defs/{target}")}])
+                );
+                assert!(property.get("anyOf").is_none());
+                assert!(property.get("type").is_none());
+                assert_no_extension(property, DEFAULT_ON_ERROR_EXTENSION);
+            }
+        }
+        for (definition, field, types) in [
+            (
+                "CompactionUpdate",
+                "summary",
+                serde_json::json!(["array", "null"]),
+            ),
+            (
+                "CompactionUpdate",
+                "error",
+                serde_json::json!(["string", "null"]),
+            ),
+            (
+                "CompactionUpdate",
+                "_meta",
+                serde_json::json!(["object", "null"]),
+            ),
+            (
+                "CompactionSummaryChunk",
+                "_meta",
+                serde_json::json!(["object", "null"]),
+            ),
+        ] {
+            let property = property_schema(&schema, definition, field);
+            assert_eq!(property["type"], types);
+            assert!(
+                !def_schema(&schema, definition)["required"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|required| required == field),
+                "{definition}.{field} must remain optional"
+            );
+            assert_bool_extension(property, DEFAULT_ON_ERROR_EXTENSION);
+        }
+        let summary = property_schema(&schema, "CompactionUpdate", "summary");
+        assert!(schema_contains_ref(summary, "#/$defs/ContentBlock"));
+        assert_bool_extension(summary, SKIP_INVALID_ITEMS_EXTENSION);
+
+        let updates = def_schema(&schema, "SessionUpdate");
+        let variants = updates
+            .get("oneOf")
+            .or_else(|| updates.get("anyOf"))
+            .and_then(Value::as_array)
+            .unwrap();
+        for (discriminator, definition) in [
+            ("compaction_update", "CompactionUpdate"),
+            ("compaction_summary_chunk", "CompactionSummaryChunk"),
+        ] {
+            let variant = variants
+                .iter()
+                .find(|variant| {
+                    variant.pointer("/properties/sessionUpdate/const")
+                        == Some(&Value::from(discriminator))
+                })
+                .unwrap_or_else(|| panic!("missing {discriminator} variant"));
+            assert!(schema_contains_ref(
+                variant,
+                &format!("#/$defs/{definition}")
+            ));
+            assert_eq!(variant["required"], serde_json::json!(["sessionUpdate"]));
+            assert!(
+                !variant["description"]
+                    .as_str()
+                    .unwrap()
+                    .contains("UNSTABLE")
+            );
+        }
+    }
+
+    #[test]
+    fn generated_compaction_status_is_an_open_non_null_string() {
+        let schema = root_schema_value();
+        let variants = def_schema(&schema, "CompactionStatus")["anyOf"]
+            .as_array()
+            .unwrap();
+        for status in ["in_progress", "completed", "failed", "cancelled"] {
+            assert!(
+                variants
+                    .iter()
+                    .any(|variant| { variant["type"] == "string" && variant["const"] == status }),
+                "missing known compaction status {status}"
+            );
+        }
+        let other = variants
+            .iter()
+            .find(|variant| variant["title"] == "other")
+            .unwrap();
+        assert_eq!(other["type"], "string");
+        for constraint in ["const", "enum", "pattern", "not"] {
+            assert!(
+                other.get(constraint).is_none(),
+                "status must accept future and extension strings"
+            );
+        }
+        assert!(variants.iter().all(|variant| variant["type"] == "string"));
+    }
+
+    #[cfg(not(feature = "unstable_protocol_v2"))]
+    #[test]
+    fn generated_v1_compaction_capability_is_optional_nullable_and_stable() {
+        let schema = root_schema_value();
+        assert_eq!(
+            def_schema(&schema, "CompactionCapabilities")["type"],
+            "object"
+        );
+        for (definition, field, target) in [
+            ("ClientCapabilities", "session", "ClientSessionCapabilities"),
+            (
+                "ClientSessionCapabilities",
+                "compaction",
+                "CompactionCapabilities",
+            ),
+        ] {
+            let property = property_schema(&schema, definition, field);
+            assert!(schema_contains_ref(property, &format!("#/$defs/{target}")));
+            assert!(
+                property["anyOf"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|variant| variant["type"] == "null")
+            );
+            assert!(
+                !def_schema(&schema, definition)["required"]
+                    .as_array()
+                    .is_some_and(|fields| fields.iter().any(|required| required == field))
+            );
+            assert!(
+                !property["description"]
+                    .as_str()
+                    .unwrap()
+                    .contains("UNSTABLE")
+            );
+        }
+    }
+
+    #[cfg(feature = "unstable_protocol_v2")]
+    #[test]
+    fn generated_v2_fallback_schema_rejects_compaction_discriminators() {
+        let schema = root_schema_value();
+        let fallback = def_schema(&schema, "SessionUpdate")["anyOf"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|variant| variant["title"] == "other")
+            .unwrap();
+        let exclusions = fallback["not"]["anyOf"].as_array().unwrap();
+        for discriminator in ["compaction_update", "compaction_summary_chunk"] {
+            assert!(
+                exclusions.contains(&serde_json::json!({
+                    "type": "object",
+                    "properties": {"sessionUpdate": {"type": "string", "const": discriminator}},
+                    "required": ["sessionUpdate"]
+                })),
+                "the fallback must reject {discriminator} regardless of payload fields"
+            );
+        }
+    }
 
     #[test]
     fn generated_prompt_response_matches_protocol_version() {
@@ -475,31 +698,80 @@ mod schema_annotation_tests {
 
     #[cfg(feature = "unstable_protocol_v2")]
     #[test]
-    fn generated_v2_schema_includes_json_rpc_batch_messages() {
+    fn generated_v2_session_responses_include_optional_available_commands() {
         let schema = root_schema_value();
+        for definition in [
+            "NewSessionResponse",
+            "ResumeSessionResponse",
+            #[cfg(feature = "unstable")]
+            "ForkSessionResponse",
+        ] {
+            let commands = property_schema(&schema, definition, "availableCommands");
+            assert_eq!(commands["type"], "array");
+            assert_eq!(commands["items"]["$ref"], "#/$defs/AvailableCommand");
+            assert!(
+                !def_schema(&schema, definition)
+                    .get("required")
+                    .and_then(Value::as_array)
+                    .is_some_and(|required| required
+                        .iter()
+                        .any(|field| field == "availableCommands")),
+                "{definition}.availableCommands must remain optional"
+            );
+            assert_bool_extension(commands, DEFAULT_ON_ERROR_EXTENSION);
+            assert_bool_extension(commands, SKIP_INVALID_ITEMS_EXTENSION);
+        }
+    }
+
+    #[cfg(feature = "unstable_protocol_v2")]
+    #[test]
+    fn generated_v2_error_response_id_is_required_and_nullable() {
+        let schema = root_schema_value();
+        for definition in ["AgentResponse", "ClientResponse"] {
+            let error = def_schema(&schema, definition)
+                .get("anyOf")
+                .and_then(Value::as_array)
+                .and_then(|variants| {
+                    variants
+                        .iter()
+                        .find(|variant| variant.pointer("/properties/error").is_some())
+                })
+                .unwrap_or_else(|| panic!("missing error variant in {definition}"));
+            assert!(
+                error
+                    .pointer("/properties/id/anyOf")
+                    .and_then(Value::as_array)
+                    .is_some_and(|variants| variants.iter().any(|v| v["type"] == "null")),
+                "{definition} error id must accept null"
+            );
+            assert!(
+                error
+                    .get("required")
+                    .and_then(Value::as_array)
+                    .is_some_and(|required| required.iter().any(|field| field == "id")),
+                "{definition} error id must be required"
+            );
+        }
+    }
+
+    #[cfg(feature = "unstable_protocol_v2")]
+    #[test]
+    fn generated_v2_schema_excludes_json_rpc_batch_messages() {
+        let schema = root_schema_value();
+        let titles: Vec<&str> = schema
+            .get("anyOf")
+            .and_then(Value::as_array)
+            .unwrap()
+            .iter()
+            .filter_map(|variant| variant.get("title").and_then(Value::as_str))
+            .collect();
         for title in [
             "AgentBatchCall",
             "AgentBatchResponse",
             "ClientBatchCall",
             "ClientBatchResponse",
         ] {
-            let batch_schema = root_variant_schema(&schema, title);
-            assert_eq!(
-                batch_schema.get("type").and_then(Value::as_str),
-                Some("array")
-            );
-            assert_eq!(
-                batch_schema.get("minItems").and_then(Value::as_u64),
-                Some(1)
-            );
-        }
-
-        for title in ["AgentBatchCall", "ClientBatchCall"] {
-            let batch_schema = root_variant_schema(&schema, title);
-            assert!(
-                schema_contains_ref(batch_schema, "#/$defs/ProtocolLevelNotification"),
-                "missing ProtocolLevelNotification in {title}"
-            );
+            assert!(!titles.contains(&title), "unexpected {title}");
         }
 
         {
@@ -517,22 +789,9 @@ mod schema_annotation_tests {
                 Some("string")
             );
 
-            let protocol_notification = def_schema(&schema, "ProtocolLevelNotification");
-            assert_eq!(
-                protocol_notification
-                    .pointer("/properties/method/type")
-                    .and_then(Value::as_str),
-                Some("string")
-            );
             assert!(
-                protocol_notification
-                    .pointer("/required")
-                    .and_then(Value::as_array)
-                    .is_some_and(|required| required.iter().any(|field| field == "method"))
-            );
-            assert!(
-                schema_contains_ref(protocol_notification, "#/$defs/CancelRequestNotification"),
-                "missing CancelRequestNotification in ProtocolLevelNotification"
+                schema_contains_ref(protocol_level, "#/$defs/CancelRequestNotification"),
+                "missing CancelRequestNotification in ProtocolLevel"
             );
         }
     }
@@ -622,34 +881,33 @@ mod schema_annotation_tests {
         }
     }
 
-    #[cfg(feature = "unstable_protocol_v2")]
     #[test]
-    fn published_v2_schema_links_to_versioned_v2_protocol_docs() {
+    fn published_schema_links_to_its_own_versioned_protocol_docs() {
         let schema = schema_value_for_publication(&root_schema_value());
         let schema_json = serde_json::to_string(&schema).unwrap();
 
-        let protocol_doc_base = if cfg!(feature = "unstable") {
-            format!("{PROTOCOL_DOC_BASE}/v2/draft")
+        let expected = if cfg!(feature = "unstable") {
+            format!("{PROTOCOL_DOC_BASE}/{PROTOCOL_VERSION_DIR}/draft/")
         } else {
-            format!("{PROTOCOL_DOC_BASE}/v2")
+            format!("{PROTOCOL_DOC_BASE}/{PROTOCOL_VERSION_DIR}/")
         };
+        let links: Vec<&str> = schema_json
+            .match_indices(PROTOCOL_DOC_BASE)
+            .map(|(i, _)| &schema_json[i..])
+            .collect();
 
-        assert!(schema_json.contains(&format!("{protocol_doc_base}/prompt-lifecycle")));
-        assert!(schema_json.contains(&format!("{protocol_doc_base}/tool-calls")));
-        assert!(schema_json.contains(&format!("{protocol_doc_base}/initialization")));
-        assert!(schema_json.contains(&format!("{protocol_doc_base}/elicitation")));
-
-        for path in VERSIONED_PROTOCOL_DOC_PATHS {
+        assert!(!links.is_empty(), "schema should link to the protocol docs");
+        for link in links {
             assert!(
-                !schema_json.contains(&format!("{PROTOCOL_DOC_BASE}/{path}")),
-                "found unversioned v2 schema docs link for {path}"
+                link.starts_with(&expected),
+                "doc link should start with {expected}: {}",
+                &link[..link.len().min(80)]
+            );
+            assert!(
+                !link.starts_with(&format!("{expected}draft/")),
+                "doc link should not be double-drafted"
             );
         }
-
-        assert!(
-            !schema_json.contains(&format!("{PROTOCOL_DOC_BASE}/v2/v2/")),
-            "v2 docs links should not be double-versioned"
-        );
     }
 
     #[test]
@@ -685,6 +943,35 @@ mod schema_annotation_tests {
                             line_index + 1
                         );
                     }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn source_default_on_null_fields_are_schema_annotated() {
+        let root = schema_crate_dir();
+        for module_dir in ["src/v1", "src/v2"] {
+            for entry in fs::read_dir(root.join(module_dir)).unwrap() {
+                let path = entry.unwrap().path();
+                if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+                    continue;
+                }
+
+                let source = fs::read_to_string(&path).unwrap();
+                let lines: Vec<_> = source.lines().collect();
+                for (line_index, line) in lines.iter().enumerate() {
+                    if !line.contains(r#"#[serde_as(deserialize_as = "DefaultOnNull"#) {
+                        continue;
+                    }
+
+                    let annotation = lines.get(line_index + 1).copied().unwrap_or_default();
+                    assert!(
+                        annotation.contains(r#""x-deserialize-default-on-null" = true"#),
+                        "{}:{} missing {DEFAULT_ON_NULL_EXTENSION}",
+                        path.display(),
+                        line_index + 1
+                    );
                 }
             }
         }
@@ -802,7 +1089,6 @@ mod schema_annotation_tests {
         );
     }
 
-    #[cfg(any(feature = "unstable_protocol_v2", feature = "unstable"))]
     fn schema_contains_ref(schema: &Value, ref_path: &str) -> bool {
         match schema {
             Value::Object(object) => object.iter().any(|(key, value)| {
@@ -1703,6 +1989,15 @@ starting with '$/' it is free to ignore the notification."
         }
 
         fn get_type_string(schema: &Value) -> String {
+            // An unconstrained JSON Schema (possibly with only a description)
+            // accepts every JSON value, not only objects.
+            if schema
+                .as_object()
+                .is_some_and(|fields| fields.keys().all(|key| key == "description"))
+            {
+                return "\"any\"".to_string();
+            }
+
             // Check for $ref
             if let Some(ref_val) = schema.get("$ref").and_then(|v| v.as_str()) {
                 let type_name = ref_val.strip_prefix("#/$defs/").unwrap_or(ref_val);
@@ -1979,17 +2274,7 @@ starting with '$/' it is free to ignore the notification."
                 "session/close" => self.agent.get("CloseSessionRequest").unwrap(),
                 "logout" => self.agent.get("LogoutRequest").unwrap(),
                 "auth/logout" => self.agent.get("LogoutAuthRequest").unwrap(),
-                "nes/start" => self.agent.get("StartNesRequest").unwrap(),
-                "nes/suggest" => self.agent.get("SuggestNesRequest").unwrap(),
-                "nes/close" => self.agent.get("CloseNesRequest").unwrap(),
-                "nes/accept" => self.agent.get("AcceptNesNotification").unwrap(),
-                "nes/reject" => self.agent.get("RejectNesNotification").unwrap(),
-                "document/didOpen" => self.agent.get("DidOpenDocumentNotification").unwrap(),
-                "document/didChange" => self.agent.get("DidChangeDocumentNotification").unwrap(),
-                "document/didClose" => self.agent.get("DidCloseDocumentNotification").unwrap(),
-                "document/didSave" => self.agent.get("DidSaveDocumentNotification").unwrap(),
-                "document/didFocus" => self.agent.get("DidFocusDocumentNotification").unwrap(),
-                "mcp/message" => self.agent.get("MessageMcpRequest").unwrap(),
+                "mcp/message" => self.agent.get("MessageMcpNotification").unwrap(),
                 _ => panic!("Introduced a method? Add it here :)"),
             }
         }
@@ -2015,9 +2300,7 @@ starting with '$/' it is free to ignore the notification."
                 "elicitation/complete" => {
                     self.client.get("CompleteElicitationNotification").unwrap()
                 }
-                "mcp/connect" => self.client.get("ConnectMcpRequest").unwrap(),
                 "mcp/message" => self.client.get("MessageMcpRequest").unwrap(),
-                "mcp/disconnect" => self.client.get("DisconnectMcpRequest").unwrap(),
                 _ => panic!("Introduced a method? Add it here :)"),
             }
         }
@@ -2169,6 +2452,19 @@ starting with '$/' it is free to ignore the notification."
     mod tests {
         use super::MarkdownGenerator;
         use serde_json::json;
+
+        #[test]
+        fn unconstrained_json_schema_renders_any_value() {
+            assert_eq!(MarkdownGenerator::get_type_string(&json!({})), "\"any\"");
+            assert_eq!(
+                MarkdownGenerator::get_type_string(&json!({"description": "Opaque MCP result"})),
+                "\"any\""
+            );
+            assert_eq!(
+                MarkdownGenerator::get_type_string(&json!({"type": "object"})),
+                "\"object\""
+            );
+        }
 
         #[test]
         fn document_union_includes_shared_properties() {
@@ -2628,8 +2924,14 @@ starting with '$/' it is free to ignore the notification."
             let (url, other) = url
                 .split_once("<ResponseField name=\"other\" type=\"object\">")
                 .unwrap();
+            // v2 requires exactly one scope; v1 still accepts either.
+            let keyword = if cfg!(feature = "unstable_protocol_v2") {
+                "oneOf"
+            } else {
+                "anyOf"
+            };
             for mode in [form, url, other] {
-                assert_scope_alternatives(mode, "anyOf");
+                assert_scope_alternatives(mode, keyword);
                 assert_eq!(mode.matches("name=\"toolCallId\"").count(), 1);
             }
         }

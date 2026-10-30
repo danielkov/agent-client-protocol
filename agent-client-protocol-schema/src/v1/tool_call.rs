@@ -1,16 +1,16 @@
 //! Tool calls represent actions that language models request agents to perform.
 //!
-//! When an LLM determines it needs to interact with external systems—like reading files,
-//! running code, or fetching data—it generates tool calls that the agent executes on its behalf.
+//! Examples include reading a file or running a command. The agent executes the tool call on
+//! the model's behalf and reports its progress to the client.
 //!
-/// See protocol docs: [Tool Calls](https://agentclientprotocol.com/protocol/tool-calls)
+/// See protocol docs: [Tool Calls](https://agentclientprotocol.com/protocol/v1/tool-calls)
 use std::{path::PathBuf, sync::Arc};
 
 use derive_more::{Display, From};
 use serde::{Deserialize, Serialize};
 use serde_with::{DefaultOnError, VecSkipError, serde_as, skip_serializing_none};
 
-use crate::{IntoOption, SkipListener};
+use crate::IntoOption;
 
 use super::{ContentBlock, Error, Meta, TerminalId};
 
@@ -19,11 +19,11 @@ use super::{ContentBlock, Error, Meta, TerminalId};
 /// Tool calls are actions that the agent executes on behalf of the language model,
 /// such as reading files, executing code, or fetching data from external sources.
 ///
-/// See protocol docs: [Tool Calls](https://agentclientprotocol.com/protocol/tool-calls)
+/// See protocol docs: [Tool Calls](https://agentclientprotocol.com/protocol/v1/tool-calls)
 #[serde_as]
 #[skip_serializing_none]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct ToolCall {
@@ -51,13 +51,13 @@ pub struct ToolCall {
     #[serde(default, skip_serializing_if = "ToolCallStatus::is_default")]
     pub status: ToolCallStatus,
     /// Content produced by the tool call.
-    #[serde_as(deserialize_as = "DefaultOnError<VecSkipError<_, SkipListener>>")]
+    #[serde_as(deserialize_as = "DefaultOnError<VecSkipError<_>>")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true, "x-deserialize-skip-invalid-items" = true)))]
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub content: Vec<ToolCallContent>,
     /// File locations affected by this tool call.
     /// Enables "follow-along" features in clients.
-    #[serde_as(deserialize_as = "DefaultOnError<VecSkipError<_, SkipListener>>")]
+    #[serde_as(deserialize_as = "DefaultOnError<VecSkipError<_>>")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true, "x-deserialize-skip-invalid-items" = true)))]
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub locations: Vec<ToolCallLocation>,
@@ -75,7 +75,7 @@ pub struct ToolCall {
     /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
     /// these keys.
     ///
-    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
+    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/v1/extensibility)
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
@@ -84,7 +84,7 @@ pub struct ToolCall {
 }
 
 impl ToolCall {
-    /// Builds [`ToolCall`] with the required fields set; optional fields start unset or empty.
+    /// Builds [`ToolCall`] with the required fields set. Optional fields start unset or empty.
     #[must_use]
     pub fn new(tool_call_id: impl Into<ToolCallId>, title: impl Into<String>) -> Self {
         Self {
@@ -156,7 +156,7 @@ impl ToolCall {
     /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
     /// these keys.
     ///
-    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
+    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/v1/extensibility)
     #[must_use]
     pub fn meta(mut self, meta: impl IntoOption<Meta>) -> Self {
         self.meta = meta.into_option();
@@ -198,11 +198,11 @@ impl ToolCall {
 /// Used to report progress and results as tools execute. All fields except
 /// the tool call ID are optional - only changed fields need to be included.
 ///
-/// See protocol docs: [Updating](https://agentclientprotocol.com/protocol/tool-calls#updating)
+/// See protocol docs: [Updating](https://agentclientprotocol.com/protocol/v1/tool-calls#updating)
 #[serde_as]
 #[skip_serializing_none]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct ToolCallUpdate {
@@ -215,7 +215,7 @@ pub struct ToolCallUpdate {
     /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
     /// these keys.
     ///
-    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
+    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/v1/extensibility)
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
@@ -224,7 +224,7 @@ pub struct ToolCallUpdate {
 }
 
 impl ToolCallUpdate {
-    /// Builds [`ToolCallUpdate`] with the required fields set; optional fields start unset or empty.
+    /// Builds [`ToolCallUpdate`] with the required fields set. Optional fields start unset or empty.
     #[must_use]
     pub fn new(tool_call_id: impl Into<ToolCallId>, fields: ToolCallUpdateFields) -> Self {
         Self {
@@ -238,7 +238,7 @@ impl ToolCallUpdate {
     /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
     /// these keys.
     ///
-    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
+    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/v1/extensibility)
     #[must_use]
     pub fn meta(mut self, meta: impl IntoOption<Meta>) -> Self {
         self.meta = meta.into_option();
@@ -251,11 +251,11 @@ impl ToolCallUpdate {
 /// All fields are optional - only include the ones being changed.
 /// Collections (content, locations) are overwritten, not extended.
 ///
-/// See protocol docs: [Updating](https://agentclientprotocol.com/protocol/tool-calls#updating)
+/// See protocol docs: [Updating](https://agentclientprotocol.com/protocol/v1/tool-calls#updating)
 #[serde_as]
 #[skip_serializing_none]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct ToolCallUpdateFields {
@@ -283,12 +283,12 @@ pub struct ToolCallUpdateFields {
     #[serde(default)]
     pub name: Option<String>,
     /// Replace the content collection.
-    #[serde_as(deserialize_as = "DefaultOnError<Option<VecSkipError<_, SkipListener>>>")]
+    #[serde_as(deserialize_as = "DefaultOnError<Option<VecSkipError<_>>>")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true, "x-deserialize-skip-invalid-items" = true)))]
     #[serde(default)]
     pub content: Option<Vec<ToolCallContent>>,
     /// Replace the locations collection.
-    #[serde_as(deserialize_as = "DefaultOnError<Option<VecSkipError<_, SkipListener>>>")]
+    #[serde_as(deserialize_as = "DefaultOnError<Option<VecSkipError<_>>>")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true, "x-deserialize-skip-invalid-items" = true)))]
     #[serde(default)]
     pub locations: Option<Vec<ToolCallLocation>>,
@@ -305,7 +305,7 @@ pub struct ToolCallUpdateFields {
 }
 
 impl ToolCallUpdateFields {
-    /// Builds [`ToolCallUpdateFields`] with the required fields set; optional fields start unset or empty.
+    /// Builds [`ToolCallUpdateFields`] with the required fields set. Optional fields start unset or empty.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -465,7 +465,7 @@ impl IntoOption<ToolCallId> for &str {
 /// Tool kinds help clients choose appropriate icons and optimize how they
 /// display tool execution progress.
 ///
-/// See protocol docs: [Creating](https://agentclientprotocol.com/protocol/tool-calls#creating)
+/// See protocol docs: [Creating](https://agentclientprotocol.com/protocol/v1/tool-calls#creating)
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -506,7 +506,7 @@ impl ToolKind {
 ///
 /// Tool calls progress through different statuses during their lifecycle.
 ///
-/// See protocol docs: [Status](https://agentclientprotocol.com/protocol/tool-calls#status)
+/// See protocol docs: [Status](https://agentclientprotocol.com/protocol/v1/tool-calls#status)
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -536,9 +536,9 @@ impl ToolCallStatus {
 /// Tool calls can produce different types of content including
 /// standard content blocks (text, images) or file diffs.
 ///
-/// See protocol docs: [Content](https://agentclientprotocol.com/protocol/tool-calls#content)
+/// See protocol docs: [Content](https://agentclientprotocol.com/protocol/v1/tool-calls#content)
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[cfg_attr(feature = "schemars", schemars(extend("discriminator" = {"propertyName": "type"})))]
 #[non_exhaustive]
@@ -552,7 +552,7 @@ pub enum ToolCallContent {
     ///
     /// The terminal must be added before calling `terminal/release`.
     ///
-    /// See protocol docs: [Terminal](https://agentclientprotocol.com/protocol/terminals)
+    /// See protocol docs: [Terminal](https://agentclientprotocol.com/protocol/v1/terminals)
     Terminal(Terminal),
 }
 
@@ -572,7 +572,7 @@ impl From<Diff> for ToolCallContent {
 #[serde_as]
 #[skip_serializing_none]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct Content {
@@ -582,7 +582,7 @@ pub struct Content {
     /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
     /// these keys.
     ///
-    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
+    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/v1/extensibility)
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
@@ -591,7 +591,7 @@ pub struct Content {
 }
 
 impl Content {
-    /// Builds [`Content`] with the required fields set; optional fields start unset or empty.
+    /// Builds [`Content`] with the required fields set. Optional fields start unset or empty.
     #[must_use]
     pub fn new(content: impl Into<ContentBlock>) -> Self {
         Self {
@@ -604,7 +604,7 @@ impl Content {
     /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
     /// these keys.
     ///
-    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
+    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/v1/extensibility)
     #[must_use]
     pub fn meta(mut self, meta: impl IntoOption<Meta>) -> Self {
         self.meta = meta.into_option();
@@ -616,11 +616,11 @@ impl Content {
 ///
 /// The terminal must be added before calling `terminal/release`.
 ///
-/// See protocol docs: [Terminal](https://agentclientprotocol.com/protocol/terminals)
+/// See protocol docs: [Terminal](https://agentclientprotocol.com/protocol/v1/terminals)
 #[serde_as]
 #[skip_serializing_none]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct Terminal {
@@ -630,7 +630,7 @@ pub struct Terminal {
     /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
     /// these keys.
     ///
-    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
+    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/v1/extensibility)
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
@@ -639,7 +639,7 @@ pub struct Terminal {
 }
 
 impl Terminal {
-    /// Builds [`Terminal`] with the required fields set; optional fields start unset or empty.
+    /// Builds [`Terminal`] with the required fields set. Optional fields start unset or empty.
     #[must_use]
     pub fn new(terminal_id: impl Into<TerminalId>) -> Self {
         Self {
@@ -652,7 +652,7 @@ impl Terminal {
     /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
     /// these keys.
     ///
-    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
+    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/v1/extensibility)
     #[must_use]
     pub fn meta(mut self, meta: impl IntoOption<Meta>) -> Self {
         self.meta = meta.into_option();
@@ -664,7 +664,7 @@ impl Terminal {
 ///
 /// Shows changes to files in a format suitable for display in the client UI.
 ///
-/// See protocol docs: [Content](https://agentclientprotocol.com/protocol/tool-calls#content)
+/// See protocol docs: [Content](https://agentclientprotocol.com/protocol/v1/tool-calls#content)
 #[serde_as]
 #[skip_serializing_none]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
@@ -674,7 +674,7 @@ impl Terminal {
 pub struct Diff {
     /// The absolute file path being modified.
     pub path: PathBuf,
-    /// The original content (None for new files).
+    /// The original content (omitted or `null` for new files).
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
@@ -685,7 +685,7 @@ pub struct Diff {
     /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
     /// these keys.
     ///
-    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
+    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/v1/extensibility)
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
@@ -694,7 +694,7 @@ pub struct Diff {
 }
 
 impl Diff {
-    /// Builds [`Diff`] with the required fields set; optional fields start unset or empty.
+    /// Builds [`Diff`] with the required fields set. Optional fields start unset or empty.
     #[must_use]
     pub fn new(path: impl Into<PathBuf>, new_text: impl Into<String>) -> Self {
         Self {
@@ -705,7 +705,7 @@ impl Diff {
         }
     }
 
-    /// The original content (None for new files).
+    /// The original content (omitted or `null` for new files).
     #[must_use]
     pub fn old_text(mut self, old_text: impl IntoOption<String>) -> Self {
         self.old_text = old_text.into_option();
@@ -716,7 +716,7 @@ impl Diff {
     /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
     /// these keys.
     ///
-    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
+    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/v1/extensibility)
     #[must_use]
     pub fn meta(mut self, meta: impl IntoOption<Meta>) -> Self {
         self.meta = meta.into_option();
@@ -729,7 +729,7 @@ impl Diff {
 /// Enables clients to implement "follow-along" features that track
 /// which files the agent is working with in real-time.
 ///
-/// See protocol docs: [Following the Agent](https://agentclientprotocol.com/protocol/tool-calls#following-the-agent)
+/// See protocol docs: [Following the Agent](https://agentclientprotocol.com/protocol/v1/tool-calls#following-the-agent)
 #[serde_as]
 #[skip_serializing_none]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
@@ -739,7 +739,7 @@ impl Diff {
 pub struct ToolCallLocation {
     /// The absolute file path being accessed or modified.
     pub path: PathBuf,
-    /// Optional line number within the file.
+    /// Optional 1-based line number within the file.
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
@@ -748,7 +748,7 @@ pub struct ToolCallLocation {
     /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
     /// these keys.
     ///
-    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
+    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/v1/extensibility)
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
@@ -757,7 +757,7 @@ pub struct ToolCallLocation {
 }
 
 impl ToolCallLocation {
-    /// Builds [`ToolCallLocation`] with the required fields set; optional fields start unset or empty.
+    /// Builds [`ToolCallLocation`] with the required fields set. Optional fields start unset or empty.
     #[must_use]
     pub fn new(path: impl Into<PathBuf>) -> Self {
         Self {
@@ -778,7 +778,7 @@ impl ToolCallLocation {
     /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
     /// these keys.
     ///
-    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
+    /// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/v1/extensibility)
     #[must_use]
     pub fn meta(mut self, meta: impl IntoOption<Meta>) -> Self {
         self.meta = meta.into_option();

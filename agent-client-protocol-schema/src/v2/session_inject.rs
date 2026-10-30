@@ -84,10 +84,11 @@ pub struct InjectSessionRequest {
     /// When the agent should deliver the message.
     pub mode: SessionInjectMode,
     /// The content blocks that compose the injected user message.
+    /// Required. Omission and `null` are invalid.
     pub content: Vec<ContentBlock>,
     /// The _meta property is reserved by ACP to allow clients and agents to attach additional
-    /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
-    /// these keys.
+    /// metadata to their interactions. Omitted and `null` are equivalent and mean no metadata.
+    /// Implementations MUST NOT assign meaning to keys they do not recognize.
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
@@ -135,8 +136,8 @@ pub struct InjectSessionResponse {
     /// Agent-assigned ID for the pending message.
     pub message_id: MessageId,
     /// The _meta property is reserved by ACP to allow clients and agents to attach additional
-    /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
-    /// these keys.
+    /// metadata to their interactions. Omitted and `null` are equivalent and mean no metadata.
+    /// Implementations MUST NOT assign meaning to keys they do not recognize.
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
@@ -187,8 +188,8 @@ pub struct RevokeInjectSessionRequest {
     /// The ID returned by `session/inject`.
     pub message_id: MessageId,
     /// The _meta property is reserved by ACP to allow clients and agents to attach additional
-    /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
-    /// these keys.
+    /// metadata to their interactions. Omitted and `null` are equivalent and mean no metadata.
+    /// Implementations MUST NOT assign meaning to keys they do not recognize.
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
@@ -229,8 +230,8 @@ impl RevokeInjectSessionRequest {
 #[non_exhaustive]
 pub struct RevokeInjectSessionResponse {
     /// The _meta property is reserved by ACP to allow clients and agents to attach additional
-    /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
-    /// these keys.
+    /// metadata to their interactions. Omitted and `null` are equivalent and mean no metadata.
+    /// Implementations MUST NOT assign meaning to keys they do not recognize.
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
@@ -279,10 +280,11 @@ pub struct ReplaceInjectSessionRequest {
     /// The ID returned by `session/inject`.
     pub message_id: MessageId,
     /// Complete replacement content for the pending user message.
+    /// Required. Omission and `null` are invalid.
     pub content: Vec<ContentBlock>,
     /// The _meta property is reserved by ACP to allow clients and agents to attach additional
-    /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
-    /// these keys.
+    /// metadata to their interactions. Omitted and `null` are equivalent and mean no metadata.
+    /// Implementations MUST NOT assign meaning to keys they do not recognize.
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
@@ -330,8 +332,8 @@ pub struct ReplaceInjectSessionResponse {
     /// The unchanged ID of the pending message.
     pub message_id: MessageId,
     /// The _meta property is reserved by ACP to allow clients and agents to attach additional
-    /// metadata to their interactions. Implementations MUST NOT make assumptions about values at
-    /// these keys.
+    /// metadata to their interactions. Omitted and `null` are equivalent and mean no metadata.
+    /// Implementations MUST NOT assign meaning to keys they do not recognize.
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
@@ -375,11 +377,13 @@ impl ReplaceInjectSessionResponse {
 #[non_exhaustive]
 pub struct SessionInjectCapabilities {
     /// Supported injection delivery modes. Must be non-empty.
+    /// Required. Omission and `null` are invalid.
     #[cfg_attr(feature = "schemars", schemars(length(min = 1)))]
     pub modes: Vec<SessionInjectMode>,
     /// Supported handling for steering during an LLM stream.
     ///
-    /// Required and non-empty when `modes` contains `steer`; otherwise optional.
+    /// Required and non-empty when `modes` contains `steer`. Otherwise optional,
+    /// with omission and `null` equivalent to no advertised stream handling.
     #[cfg_attr(feature = "schemars", schemars(length(min = 1)))]
     pub steer_in_stream: Option<Vec<SessionInjectSteerInStream>>,
     /// Capabilities for editing pending injected messages.
@@ -390,6 +394,7 @@ pub struct SessionInjectCapabilities {
     #[serde(default)]
     pub pending: Option<SessionInjectPendingCapabilities>,
     /// The _meta property is reserved by ACP for extension metadata.
+    /// Optional. Omitted and `null` are equivalent and mean no metadata.
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
@@ -472,12 +477,13 @@ fn session_inject_capabilities_transform(schema: &mut Schema) {
 pub struct SessionInjectPendingCapabilities {
     /// Whether `session/replace_inject` is supported.
     ///
-    /// Optional. Omitted or `null` defaults to `false`.
+    /// Optional. Omitted or `null` means replacement is not supported.
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
     pub replace: Option<bool>,
     /// The _meta property is reserved by ACP for extension metadata.
+    /// Optional. Omitted and `null` are equivalent and mean no metadata.
     #[serde_as(deserialize_as = "DefaultOnError")]
     #[cfg_attr(feature = "schemars", schemars(extend("x-deserialize-default-on-error" = true)))]
     #[serde(default)]
@@ -554,6 +560,85 @@ mod tests {
                 "pending": {"replace": true}
             })
         );
+    }
+
+    #[test]
+    fn injection_requests_keep_actionable_fields_strict() {
+        let inject = json!({"sessionId": "s", "mode": "queue", "content": []});
+        let replace = json!({"sessionId": "s", "messageId": "m", "content": []});
+        for content in [
+            json!(null),
+            json!(false),
+            json!([42]),
+            json!([{"type": "text"}]),
+        ] {
+            let mut request = inject.clone();
+            request["content"] = content.clone();
+            assert!(serde_json::from_value::<InjectSessionRequest>(request).is_err());
+            let mut request = replace.clone();
+            request["content"] = content;
+            assert!(serde_json::from_value::<ReplaceInjectSessionRequest>(request).is_err());
+        }
+        let mut request = inject;
+        request.as_object_mut().unwrap().remove("content");
+        assert!(serde_json::from_value::<InjectSessionRequest>(request).is_err());
+        let mut request = replace;
+        request.as_object_mut().unwrap().remove("content");
+        assert!(serde_json::from_value::<ReplaceInjectSessionRequest>(request).is_err());
+    }
+
+    #[test]
+    fn injection_unknown_modes_and_optional_metadata_round_trip() {
+        for mode in ["queue", "steer", "_custom", "future_mode"] {
+            let value = json!({"sessionId": "s", "mode": mode, "content": []});
+            let mut with_meta = value.clone();
+            with_meta["_meta"] = json!(null);
+            let request: InjectSessionRequest = serde_json::from_value(with_meta).unwrap();
+            assert_eq!(serde_json::to_value(request).unwrap(), value);
+        }
+        for value in [json!(null), json!(42), json!({"queue": true})] {
+            assert!(serde_json::from_value::<SessionInjectMode>(value.clone()).is_err());
+            assert!(serde_json::from_value::<SessionInjectSteerInStream>(value).is_err());
+        }
+        for value in ["interrupt", "finish", "_custom", "future_mode"] {
+            let parsed: SessionInjectSteerInStream = serde_json::from_value(json!(value)).unwrap();
+            assert_eq!(serde_json::to_value(parsed).unwrap(), json!(value));
+        }
+    }
+
+    #[test]
+    fn injection_preserves_unknown_content_blocks() {
+        for kind in ["_custom", "future_content"] {
+            let content = json!([{"type": kind, "payload": {"value": 42}}]);
+            let inject = json!({"sessionId": "s", "mode": "queue", "content": content});
+            let parsed: InjectSessionRequest = serde_json::from_value(inject.clone()).unwrap();
+            assert_eq!(serde_json::to_value(parsed).unwrap(), inject);
+            let replace = json!({"sessionId": "s", "messageId": "m", "content": content});
+            let parsed: ReplaceInjectSessionRequest =
+                serde_json::from_value(replace.clone()).unwrap();
+            assert_eq!(serde_json::to_value(parsed).unwrap(), replace);
+        }
+    }
+
+    #[test]
+    fn absent_null_and_malformed_injection_capabilities_mean_unsupported() {
+        for value in [
+            json!({}),
+            json!({"inject": null}),
+            json!({"inject": 42}),
+            json!({"inject": {"modes": null}}),
+            json!({"inject": {"modes": [42]}}),
+        ] {
+            let parsed: crate::v2::SessionCapabilities = serde_json::from_value(value).unwrap();
+            assert!(parsed.inject.is_none());
+        }
+        let capabilities: SessionInjectCapabilities = serde_json::from_value(json!({
+            "modes": ["queue", "_custom"], "steerInStream": null, "pending": null, "_meta": null
+        }))
+        .unwrap();
+        assert!(capabilities.steer_in_stream.is_none());
+        assert!(capabilities.pending.is_none());
+        assert!(capabilities.meta.is_none());
     }
 
     #[test]
