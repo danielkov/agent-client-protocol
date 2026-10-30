@@ -4,9 +4,9 @@ on:
   # Allow manual trigger
   workflow_dispatch:
 
-  # Run hourly to pick up registry changes
+  # Run daily to pick up registry changes
   schedule:
-    - cron: "15 * * * *" # Every hour at :15
+    - cron: "15 0 * * *" # Every day at 00:15 UTC
 
 jobs:
   sync:
@@ -32,7 +32,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v4
         with:
-          node-version: latest
+          node-version: "lts/*"
+          check-latest: true
           cache: "npm"
 
       - name: Install dependencies
