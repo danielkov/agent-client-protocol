@@ -2826,7 +2826,7 @@ or Client **MAY** ignore a `$/` notification it cannot act on."
                 "+nightly",
                 "rustdoc",
                 "-p",
-                "agent-client-protocol-schema",
+                "agentkit-acp-schema",
                 "--lib",
                 "--all-features",
                 // Ask Cargo, not just rustdoc, for JSON so it reports the artifact path.
@@ -2844,9 +2844,8 @@ or Client **MAY** ignore a `$/` notification it cannot act on."
             String::from_utf8_lossy(&output.stderr)
         );
 
-        let json_path = schema_rustdoc_path(&output.stdout).expect(
-            "cargo rustdoc did not report a JSON artifact for agent-client-protocol-schema",
-        );
+        let json_path = schema_rustdoc_path(&output.stdout)
+            .expect("cargo rustdoc did not report a JSON artifact for agentkit-acp-schema");
         let json_content = fs::read_to_string(&json_path).unwrap_or_else(|error| {
             panic!(
                 "failed to read rustdoc JSON at {}: {error}",

@@ -1,17 +1,20 @@
 [package]
-name = "agent-client-protocol-schema"
+name = "agentkit-acp-schema"
 authors = ["Zed <hi@zed.dev>"]
 version = "1.19.0"
 edition = "2024"
 license = "Apache-2.0"
 description = "A protocol for standardizing communication between code editors and AI coding agents"
-repository = "https://github.com/agentclientprotocol/agent-client-protocol"
-documentation = "https://docs.rs/agent-client-protocol-schema"
+repository = "https://github.com/danielkov/agent-client-protocol"
+documentation = "https://docs.rs/agentkit-acp-schema"
 readme = "../README.md"
 keywords = ["agent", "client", "protocol", "ai", "editor"]
 categories = ["development-tools", "api-bindings"]
 include = ["/src/**/*.rs", "/Cargo.toml"]
 rust-version.workspace = true
+
+[lib]
+name = "agent_client_protocol_schema"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -32,6 +35,7 @@ unstable = [
     "unstable_llm_providers",
     "unstable_mcp_over_acp",
     "unstable_plan_operations",
+    "unstable_prompt_delivery",
     "unstable_prompt_suggestions",
     "unstable_proxy_chains",
     "unstable_session_archive",
@@ -48,6 +52,8 @@ unstable = [
 # It introduces a parallel `v2` module with a different wire version, so it
 # must be opted into explicitly.
 unstable_protocol_v2 = []
+# Prompt delivery is a v2-only draft extension. Pair it with `unstable_protocol_v2`.
+unstable_prompt_delivery = []
 unstable_agent_skills = []
 unstable_auth_status = []
 unstable_llm_providers = []

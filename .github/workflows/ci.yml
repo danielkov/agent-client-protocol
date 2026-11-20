@@ -75,7 +75,7 @@ jobs:
       - name: Lint
         run: |
           cargo clippy
-          cargo clippy -p agent-client-protocol-schema --all-targets --no-default-features --features unstable,unstable_protocol_v2,tracing
+          cargo clippy -p agentkit-acp-schema --all-targets --no-default-features --features unstable,unstable_protocol_v2,tracing
           cargo clippy --all-targets --all-features
 
       - name: Build
@@ -84,7 +84,7 @@ jobs:
       - name: Check docs.rs build
         env:
           RUSTDOCFLAGS: --cfg docsrs
-        run: cargo +nightly doc -p agent-client-protocol-schema --all-features --no-deps
+        run: cargo +nightly doc -p agentkit-acp-schema --all-features --no-deps
 
       - name: Run tests
         run: cargo test --all-features
@@ -101,8 +101,8 @@ jobs:
       # feature such as `unstable_end_turn_token_usage` is off.
       - name: Run schema tests without every unstable feature
         run: |
-          cargo test -p agent-client-protocol-schema --features unstable_protocol_v2
-          cargo test -p agent-client-protocol-schema --features unstable_subagents
+          cargo test -p agentkit-acp-schema --features unstable_protocol_v2
+          cargo test -p agentkit-acp-schema --features unstable_subagents
 
       - name: Check generated files are up to date
         run: |

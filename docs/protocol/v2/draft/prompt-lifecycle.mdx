@@ -407,6 +407,10 @@ The same insertion boundary applies when [closing the session](/protocol/v2/draf
 
 #### Prompts during active work
 
+The experimental `unstable_prompt_delivery` schema lets Clients request `delivery: "steer"` or `delivery: "queue"` on `session/prompt` when the Agent advertises the mode under `capabilities.session.prompt.delivery`. A steer targets the current turn at an Agent-selected safe point. A queued prompt starts a new turn. In either mode, the response acknowledges insertion, not receipt. See [RFD #1261](https://github.com/agentclientprotocol/agent-client-protocol/pull/1261) for the proposed behavior.
+
+The experiment changes the cancellation rule below only for explicit `steer` and `queue` prompts. `session/cancel` stops the active turn but does not withdraw those prompts. To withdraw an explicit prompt before insertion, send `$/cancel_request` with the prompt's request ID. `session/close` still cancels all uninserted prompts.
+
 Clients **MAY** send `session/prompt` in any state, including while foreground work is `running` or `requires_action`. The Agent either inserts the prompt right away or holds it and inserts it later. Held prompts are inserted in the order they were received. What inserting during active work means, such as steering the current turn or starting the next one, is up to the Agent. Agents **MUST NOT** reject a prompt only because foreground work is active.
 
 A held prompt's response stays pending until the prompt is inserted. Until then, the Client can drop it in two ways:
